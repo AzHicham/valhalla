@@ -136,6 +136,8 @@ protected:
                      const sif::EdgeLabel& pred,
                      const uint32_t pred_idx,
                      const bool from_transition,
+                     const bool from_bss,
+                     const sif::TravelMode mode,
                      const valhalla::Location& dest,
                      std::pair<int32_t, float>& best_path);
 

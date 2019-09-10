@@ -30,6 +30,8 @@ constexpr float kDefaultTollBoothCost = 15.0f;           // Seconds
 constexpr float kDefaultFerryCost = 300.0f;              // Seconds
 constexpr float kDefaultCountryCrossingCost = 600.0f;    // Seconds
 constexpr float kDefaultCountryCrossingPenalty = 0.0f;   // Seconds
+constexpr float kDefaultBssCost = 120.0f;                // Seconds
+constexpr float kDefaultBssPenalty = 0.0f;              // Seconds
 
 // Maximum route distances
 constexpr uint32_t kMaxDistanceFoot = 100000;      // 100 km
@@ -581,6 +583,7 @@ bool PedestrianCost::Allowed(const baldr::DirectedEdge* edge,
                              const uint32_t tz_index) const {
   if (!(edge->forwardaccess() & access_mask_) || (edge->surface() > minimal_allowed_surface_) ||
       edge->is_shortcut() || IsUserAvoidEdge(edgeid) || edge->sac_scale() > max_hiking_difficulty_ ||
+      (!pred.deadend() && pred.opp_local_idx() == edge->localedgeidx() && pred.mode() == TravelMode::kPedestrian) ||
       //      (edge->max_up_slope() > max_grade_ || edge->max_down_slope() > max_grade_) ||
       ((pred.path_distance() + edge->length()) > max_distance_)) {
     return false;
@@ -630,6 +633,7 @@ bool PedestrianCost::AllowedReverse(const baldr::DirectedEdge* edge,
   if (!(opp_edge->forwardaccess() & access_mask_) ||
       (opp_edge->surface() > minimal_allowed_surface_) || opp_edge->is_shortcut() ||
       IsUserAvoidEdge(opp_edgeid) || edge->sac_scale() > max_hiking_difficulty_ ||
+      (!pred.deadend() && pred.opp_local_idx() == edge->localedgeidx() && pred.mode() == TravelMode::kPedestrian) ||
       //      (opp_edge->max_up_slope() > max_grade_ || opp_edge->max_down_slope() > max_grade_) ||
       opp_edge->use() == Use::kTransitConnection || opp_edge->use() == Use::kEgressConnection ||
       opp_edge->use() == Use::kPlatformConnection) {
@@ -684,7 +688,7 @@ Cost PedestrianCost::EdgeCost(const baldr::DirectedEdge* edge, const uint32_t sp
   // Slightly favor walkways/paths and penalize alleys and driveways.
   float sec =
       edge->length() * speedfactor_ * kSacScaleSpeedFactor[static_cast<uint8_t>(edge->sac_scale())];
-  return {sec * factor, sec};
+  return {sec * 1, sec};
 }
 
 // Returns the time (in seconds) to make the transition from the predecessor
@@ -898,6 +902,8 @@ void ParsePedestrianCostOptions(const rapidjson::Document& doc,
     pbf_costing_options->set_driveway_factor(kDefaultDrivewayFactor);
     pbf_costing_options->set_transit_start_end_max_distance(kTransitStartEndMaxDistance);
     pbf_costing_options->set_transit_transfer_max_distance(kTransitTransferMaxDistance);
+    pbf_costing_options->set_bike_share_cost(kDefaultBssCost);
+    pbf_costing_options->set_bike_share_penalty(kDefaultBssPenalty);
   }
 }
 

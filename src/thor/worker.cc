@@ -96,7 +96,7 @@ thor_worker_t::thor_worker_t(const boost::property_tree::ptree& config,
 thor_worker_t::~thor_worker_t() {
 }
 
-#ifdef HAVE_HTTP
+
 prime_server::worker_t::result_t
 thor_worker_t::work(const std::list<zmq::message_t>& job,
                     void* request_info,
@@ -200,7 +200,7 @@ void run_service(const boost::property_tree::ptree& config) {
 
   // TODO: should we listen for SIGINT and terminate gracefully/exit(0)?
 }
-#endif
+
 
 // Get the costing options if in the config or get the empty default.
 // Creates the cost in the cost factory

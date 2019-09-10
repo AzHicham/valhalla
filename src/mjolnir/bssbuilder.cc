@@ -96,7 +96,6 @@ std::vector<OSMConnectionEdge> project(const GraphTile& local_tile,
     auto latlng = bss.latlng();
     const auto bss_ll = PointLL{latlng.first, latlng.second};
     float mindist = 10000000.0f;
-    uint32_t edgelength = 0;
     GraphId startnode, endnode;
     std::vector<PointLL> closest_shape;
     std::tuple<PointLL, float, int> closest;
@@ -126,7 +125,7 @@ std::vector<OSMConnectionEdge> project(const GraphTile& local_tile,
         if (!directededge->forward()) {
           std::reverse(this_shape.begin(), this_shape.end());
         }
-        auto this_closest = bss_ll.ClosestPoint(this_shape);
+        auto this_closest = bss_ll.Project(this_shape);
         names = edgeinfo.GetNames();
         if (std::get<1>(this_closest) < mindist) {
           startnode = {local_tile.id().tileid(), local_level, i};
@@ -134,7 +133,6 @@ std::vector<OSMConnectionEdge> project(const GraphTile& local_tile,
           mindist = std::get<1>(this_closest);
           closest = this_closest;
           closest_shape = this_shape;
-          edgelength = directededge->length();
           way_id = edgeinfo.wayid();
           best_directededge = directededge;
         }
@@ -147,19 +145,28 @@ std::vector<OSMConnectionEdge> project(const GraphTile& local_tile,
     // Create a temporary connection which starts from a existing way node in the tile and point to
     // the bss node
     {
+
+      auto toto = bss_ll.Project(closest_shape);
+
       std::list<PointLL> startshape;
       for (uint32_t i = 0; i <= std::get<2>(closest); i++) {
         startshape.push_back(closest_shape[i]);
       }
+
+      startshape.push_back(std::get<0>(closest));
       startshape.push_back(bss_ll);
 
       std::list<PointLL> endshape;
       endshape.push_back(bss_ll);
-      for (uint32_t i = std::get<2>(closest); i < closest_shape.size(); i++) {
+      endshape.push_back(std::get<0>(closest));
+
+      for (uint32_t i = std::get<2>(closest)+1; i < closest_shape.size(); i++) {
         endshape.push_back(closest_shape[i]);
       }
+
       res.emplace_back(startnode, endnode, way_id, std::move(names), std::move(startshape),
                        std::move(endshape), bss_ll);
+
     }
   }
   boost::sort(res);
