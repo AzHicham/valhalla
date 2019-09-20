@@ -357,6 +357,7 @@ PointLL::Project(const std::vector<PointLL>& pts) const {
   }
   return std::make_tuple(best, min_distance, best_index);
 };
+
 // Explicit instantiations
 template bool PointLL::WithinPolygon(const std::vector<PointLL>&) const;
 template bool PointLL::WithinPolygon(const std::list<PointLL>&) const;

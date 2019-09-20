@@ -346,6 +346,15 @@ struct bin_handler_t {
             candidate.edge_info->shape()[i].Distance(candidate.edge_info->shape()[i + 1]);
       }
       partial_length += candidate.edge_info->shape()[candidate.index].Distance(candidate.point);
+
+      std::cout << "location: " << location.latlng_.second << " " << location.latlng_.first << "\n";
+      if(candidate.edge->use() == Use::kBikeShareConnection) {
+    	  std::cout << "using bike share conneciont "<< "\n";
+      }
+      for(const auto& p : candidate.edge_info->shape()) {
+    	  std::cout << p.second << " " << p.first << "\n";
+      }
+
       partial_length = std::min(partial_length, static_cast<double>(candidate.edge->length()));
       float length_ratio =
           static_cast<float>(partial_length / static_cast<double>(candidate.edge->length()));

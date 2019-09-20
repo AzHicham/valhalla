@@ -138,7 +138,7 @@ void AStarBSSAlgorithm::ExpandForward(GraphReader& graphreader,
     return;
   }
   const NodeInfo* nodeinfo = tile->node(node);
-  if (!pedestrian_costing_->Allowed(nodeinfo)) {
+  if (!current_costing->Allowed(nodeinfo)) {
     return;
   }
 
@@ -348,10 +348,10 @@ AStarBSSAlgorithm::GetBestPath(valhalla::Location& origin,
       // trivial (cannot reach destination along this one edge).
       if (pred.predecessor() == kInvalidLabel) {
         if (IsTrivial(pred.edgeid(), origin, destination)) {
-          return {FormPath(predindex)};
+          return {FormPath(graphreader, predindex)};
         }
       } else {
-        return {FormPath(predindex)};
+        return {FormPath(graphreader, predindex)};
       }
     }
 
@@ -373,7 +373,7 @@ AStarBSSAlgorithm::GetBestPath(valhalla::Location& origin,
       nc = 0;
     } else if (nc++ > kMaxIterationsWithoutConvergence) {
       if (best_path.first >= 0) {
-        return {FormPath(best_path.first)};
+        return {FormPath(graphreader, best_path.first)};
       } else {
         LOG_ERROR("No convergence to destination after = " + std::to_string(edgelabels_.size()));
         return {};
@@ -396,6 +396,9 @@ AStarBSSAlgorithm::GetBestPath(valhalla::Location& origin,
 void AStarBSSAlgorithm::SetOrigin(GraphReader& graphreader,
                                    valhalla::Location& origin,
                                    const valhalla::Location& destination) {
+
+  std::cout << " Set Origin " << std::endl;
+  std::cout << origin.path_edges().size() << std::endl;
   // Only skip inbound edges if we have other options
   bool has_other_edges = false;
   std::for_each(origin.path_edges().begin(), origin.path_edges().end(),
@@ -435,9 +438,7 @@ void AStarBSSAlgorithm::SetOrigin(GraphReader& graphreader,
     // Get the directed edge
     const GraphTile* tile = graphreader.GetGraphTile(edgeid);
     const DirectedEdge* directededge = tile->directededge(edgeid);
-    if (directededge->use() == Use::kBikeShareConnection) {
-      std::cout << " Use::kBikeShareConnection " << std::endl;
-    }
+
     // Get the tile at the end node. Skip if tile not found as we won't be
     // able to expand from this origin edge.
     const GraphTile* endtile = graphreader.GetGraphTile(directededge->endnode());
@@ -450,7 +451,11 @@ void AStarBSSAlgorithm::SetOrigin(GraphReader& graphreader,
     Cost cost = pedestrian_costing_->EdgeCost(directededge, tile->GetSpeed(directededge)) *
                 (1.0f - edge.percent_along());
     float dist = pedestrian_astarheuristic_.GetDistance(endtile->get_node_ll(directededge->endnode()));
-
+    if (directededge->use() == Use::kBikeShareConnection) {
+      std::cout << " Use::kBikeShareConnection " << std::endl;
+    }
+    std::cout << "path edge endpoint " << endtile->get_node_ll(directededge->endnode()).second << " "
+    		<< endtile->get_node_ll(directededge->endnode()).first << " distance: " << edge.distance() << "\n";
     // We need to penalize this location based on its score (distance in meters from input)
     // We assume the slowest speed you could travel to cover that distance to start/end the route
     // TODO: assumes 1m/s which is a maximum penalty this could vary per costing model
@@ -518,8 +523,10 @@ void AStarBSSAlgorithm::SetOrigin(GraphReader& graphreader,
 
 // Add a destination edge
 uint32_t AStarBSSAlgorithm::SetDestination(GraphReader& graphreader,
-                                            const valhalla::Location& dest) {
-  // Only skip outbound edges if we have other options
+                                           const valhalla::Location& dest) {
+  std::cout << " SetDestination "<< std::endl;
+
+	// Only skip outbound edges if we have other options
   bool has_other_edges = false;
   std::for_each(dest.path_edges().begin(), dest.path_edges().end(),
                 [&has_other_edges](const valhalla::Location::PathEdge& e) {
@@ -546,11 +553,12 @@ uint32_t AStarBSSAlgorithm::SetDestination(GraphReader& graphreader,
     const DirectedEdge* directededge = tile->directededge(edgeid);
     auto* endonode = tile->node(directededge->endnode());
     GraphId startnode = tile->directededge(endonode->edge_index() + directededge->opp_index())->endnode();
-    auto ll = tile->get_node_ll(startnode);
-    std::cout << ll.second << " " << ll.first  << std::endl;
     if (directededge->use() == Use::kBikeShareConnection) {
       std::cout << " Use::kBikeShareConnection " << std::endl;
     }
+    auto ll = tile->get_node_ll(startnode);
+    std::cout << ll.second << " " << ll.first  << std::endl;
+
     destinations_[edge.graph_id()] = pedestrian_costing_->EdgeCost(directededge, tile->GetSpeed(directededge)) *
                                      (1.0f - edge.percent_along());
 
@@ -563,7 +571,8 @@ uint32_t AStarBSSAlgorithm::SetDestination(GraphReader& graphreader,
 }
 
 // Form the path from the adjacency list.
-std::vector<PathInfo> AStarBSSAlgorithm::FormPath(const uint32_t dest) {
+std::vector<PathInfo> AStarBSSAlgorithm::FormPath(baldr::GraphReader& graphreader,
+											      const uint32_t dest) {
   // Metrics to track
   LOG_DEBUG("path_cost::" + std::to_string(edgelabels_[dest].cost().cost));
   LOG_DEBUG("path_iterations::" + std::to_string(edgelabels_.size()));
@@ -576,6 +585,10 @@ std::vector<PathInfo> AStarBSSAlgorithm::FormPath(const uint32_t dest) {
     path.emplace_back(edgelabel.mode(), edgelabel.cost().secs, edgelabel.edgeid(), 0,
                       edgelabel.cost().cost);
 
+    const GraphTile* tile = graphreader.GetGraphTile(edgelabel.edgeid());
+    const DirectedEdge* directededge = tile->directededge(edgelabel.edgeid());
+    auto ll = tile->get_node_ll(directededge->endnode());
+
     // Check if this is a ferry
     if (edgelabel.use() == Use::kFerry) {
       has_ferry_ = true;
@@ -586,7 +599,11 @@ std::vector<PathInfo> AStarBSSAlgorithm::FormPath(const uint32_t dest) {
     if (edgelabel.mode() == TravelMode::kBicycle) {
       std::cout << "use Bicycle" << std::endl;
     }
+    if (directededge->use() == Use::kBikeShareConnection) {
+          std::cout << "use BikeShareConnection" << std::endl;
+        }
 
+    std::cout << ll.second << " " << ll.first << '\n';
   }
 
   // Reverse the list and return
