@@ -31,7 +31,7 @@ constexpr float kDefaultFerryCost = 300.0f;              // Seconds
 constexpr float kDefaultCountryCrossingCost = 600.0f;    // Seconds
 constexpr float kDefaultCountryCrossingPenalty = 0.0f;   // Seconds
 constexpr float kDefaultBssCost = 120.0f;                // Seconds
-constexpr float kDefaultBssPenalty = 0.0f;              // Seconds
+constexpr float kDefaultBssPenalty = 0.0f;               // Seconds
 
 // Maximum route distances
 constexpr uint32_t kMaxDistanceFoot = 100000;      // 100 km
@@ -688,7 +688,7 @@ Cost PedestrianCost::EdgeCost(const baldr::DirectedEdge* edge, const uint32_t sp
   // Slightly favor walkways/paths and penalize alleys and driveways.
   float sec =
       edge->length() * speedfactor_ * kSacScaleSpeedFactor[static_cast<uint8_t>(edge->sac_scale())];
-  return {sec * 1, sec};
+  return {sec * factor, sec};
 }
 
 // Returns the time (in seconds) to make the transition from the predecessor

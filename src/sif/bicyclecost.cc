@@ -695,7 +695,7 @@ Cost BicycleCost::EdgeCost(const baldr::DirectedEdge* edge, const uint32_t speed
 
   // Compute elapsed time based on speed. Modulate cost with weighting factors.
   float sec = (edge->length() * speedfactor_[bike_speed]);
-  return {sec * 1, sec};
+  return {sec * factor, sec};
 }
 
 // Returns the time (in seconds) to make the transition from the predecessor

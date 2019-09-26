@@ -49,7 +49,7 @@ void AStarPathAlgorithm::Init(const midgard::PointLL& origll, const midgard::Poi
   LOG_TRACE("Dest LL = " + std::to_string(destll.lat()) + "," + std::to_string(destll.lng()));
 
   // Set the destination and cost factor in the A* heuristic
-  astarheuristic_.Init(destll, 0);
+  astarheuristic_.Init(destll, costing_->AStarCostFactor());
 
   // Get the initial cost based on A* heuristic from origin
   float mincost = astarheuristic_.Get(origll);

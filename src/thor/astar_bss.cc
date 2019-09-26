@@ -59,11 +59,17 @@ void AStarBSSAlgorithm::Init(const midgard::PointLL& origll, const midgard::Poin
   LOG_TRACE("Dest LL = " + std::to_string(destll.lat()) + "," + std::to_string(destll.lng()));
 
   // Set the destination and cost factor in the A* heuristic
-  pedestrian_astarheuristic_.Init(destll,0);
-  bicycle_astarheuristic_.Init(destll, 0);
+  // In order to maintain the underestimation, we chose the min value of those two factors
+  // At the same time, we also want to get the factors as large as possible to optimize the performance
+  // TODO: Any better idea to normalize the A* heuristic cost?
+  auto common_astar_cost = std::min(pedestrian_costing_->AStarCostFactor(), bicycle_costing_->AStarCostFactor());
+
+  pedestrian_astarheuristic_.Init(destll, common_astar_cost);
+  bicycle_astarheuristic_.Init(destll, common_astar_cost);
 
   // Get the initial cost based on A* heuristic from origin
-  float mincost = pedestrian_astarheuristic_.Get(origll);
+  float mincost = std::min(bicycle_astarheuristic_.Get(origll),
+		  pedestrian_astarheuristic_.Get(origll));
 
   // Reserve size for edge labels - do this here rather than in constructor so
   // to limit how much extra memory is used for persistent objects.
@@ -75,9 +81,9 @@ void AStarBSSAlgorithm::Init(const midgard::PointLL& origll, const midgard::Poin
 
   // Construct adjacency list, clear edge status.
   // Set bucket size and cost range based on DynamicCost.
-  uint32_t bucketsize = pedestrian_costing_->UnitSize();
+  uint32_t bucketsize = std::max(pedestrian_costing_->UnitSize(), bicycle_costing_->UnitSize());
   float range = kBucketCount * bucketsize;
-  adjacencylist_.reset(new DoubleBucketQueue(mincost, range, bucketsize, edgecost));
+  adjacencylist_ = std::make_shared<DoubleBucketQueue>(mincost, range, bucketsize, edgecost);
   pedestrian_edgestatus_.clear();
   bicycle_edgestatus_.clear();
 
@@ -130,7 +136,6 @@ void AStarBSSAlgorithm::ExpandForward(GraphReader& graphreader,
   auto current_costing = (mode == TravelMode::kPedestrian ? pedestrian_costing_ : bicycle_costing_);
   auto current_heuristic = (mode == TravelMode::kPedestrian ? pedestrian_astarheuristic_ : bicycle_astarheuristic_);
 
-
   // Get the tile and the node info. Skip if tile is null (can happen
   // with regional data sets) or if no access at the node.
   const GraphTile* tile = graphreader.GetGraphTile(node);
@@ -151,10 +156,6 @@ void AStarBSSAlgorithm::ExpandForward(GraphReader& graphreader,
   EdgeStatusInfo* current_es = (mode == TravelMode::kPedestrian ? pedestrian_edgestatus_ : bicycle_edgestatus_).GetPtr(edgeid, tile);
   const DirectedEdge* directededge = tile->directededge(nodeinfo->edge_index());
 
-  if (nodeinfo->type() == NodeType::kBikeShare) {
-    std::cout << "BSS " << " mode " << int(mode) << std::endl;
-  }
-
   for (uint32_t i = 0; i < nodeinfo->edge_count(); ++i, ++directededge, ++edgeid, ++current_es) {
     // Skip shortcut edges until we have stopped expanding on the next level.
     // Also skip shortcut edges when near the destination. Always skip within
@@ -173,9 +174,7 @@ void AStarBSSAlgorithm::ExpandForward(GraphReader& graphreader,
     } else if (shortcuts & directededge->superseded()) {
       continue;
     }
-    if (directededge->use() == Use::kBikeShareConnection) {
-      std::cout << " Use::kBikeShareConnection " << std::endl;
-    }
+
     // Skip this edge if permanently labeled (best path already found to this
     // directed edge), if no access is allowed to this edge (based on costing method),
     // or if a complex restriction exists.
@@ -243,14 +242,6 @@ void AStarBSSAlgorithm::ExpandForward(GraphReader& graphreader,
       sortcost += current_heuristic.Get(t2->get_node_ll(directededge->endnode()), dist);
     }
 
-    if (mode == TravelMode::kPedestrian) {
-      std::cout << "use pedestrian" << std::endl;
-      std::cout << "sort cost  " << sortcost  << std::endl;
-    }
-    if (mode == TravelMode::kBicycle) {
-      std::cout << "use Bicycle" << std::endl;
-      std::cout << "sort cost  " << sortcost  << std::endl;
-    }
     // Add to the adjacency list and edge labels.
     uint32_t idx = edgelabels_.size();
     edgelabels_.emplace_back(pred_idx, edgeid, directededge, newcost, sortcost, dist, mode, 0);
@@ -341,7 +332,6 @@ AStarBSSAlgorithm::GetBestPath(valhalla::Location& origin,
     // edge and potentially complete the path.
     EdgeLabel pred = edgelabels_[predindex];
     const GraphTile* tile = graphreader.GetGraphTile(pred.endnode());
-    std::cout << "pop node "  << "sort cost: " << pred.sortcost() << " pred mode: "<< static_cast<int>(pred.mode() ) << "   "<< tile->get_node_ll(pred.endnode()).second << "  " << tile->get_node_ll(pred.endnode()).first << std::endl;
 
     if (destinations_.find(pred.edgeid()) != destinations_.end() && pred.mode() == TravelMode::kPedestrian) {
       // Check if a trivial path. Skip if no predecessor and not
@@ -397,8 +387,6 @@ void AStarBSSAlgorithm::SetOrigin(GraphReader& graphreader,
                                    valhalla::Location& origin,
                                    const valhalla::Location& destination) {
 
-  std::cout << " Set Origin " << std::endl;
-  std::cout << origin.path_edges().size() << std::endl;
   // Only skip inbound edges if we have other options
   bool has_other_edges = false;
   std::for_each(origin.path_edges().begin(), origin.path_edges().end(),
@@ -451,11 +439,7 @@ void AStarBSSAlgorithm::SetOrigin(GraphReader& graphreader,
     Cost cost = pedestrian_costing_->EdgeCost(directededge, tile->GetSpeed(directededge)) *
                 (1.0f - edge.percent_along());
     float dist = pedestrian_astarheuristic_.GetDistance(endtile->get_node_ll(directededge->endnode()));
-    if (directededge->use() == Use::kBikeShareConnection) {
-      std::cout << " Use::kBikeShareConnection " << std::endl;
-    }
-    std::cout << "path edge endpoint " << endtile->get_node_ll(directededge->endnode()).second << " "
-    		<< endtile->get_node_ll(directededge->endnode()).first << " distance: " << edge.distance() << "\n";
+
     // We need to penalize this location based on its score (distance in meters from input)
     // We assume the slowest speed you could travel to cover that distance to start/end the route
     // TODO: assumes 1m/s which is a maximum penalty this could vary per costing model
@@ -524,7 +508,6 @@ void AStarBSSAlgorithm::SetOrigin(GraphReader& graphreader,
 // Add a destination edge
 uint32_t AStarBSSAlgorithm::SetDestination(GraphReader& graphreader,
                                            const valhalla::Location& dest) {
-  std::cout << " SetDestination "<< std::endl;
 
 	// Only skip outbound edges if we have other options
   bool has_other_edges = false;
@@ -553,11 +536,6 @@ uint32_t AStarBSSAlgorithm::SetDestination(GraphReader& graphreader,
     const DirectedEdge* directededge = tile->directededge(edgeid);
     auto* endonode = tile->node(directededge->endnode());
     GraphId startnode = tile->directededge(endonode->edge_index() + directededge->opp_index())->endnode();
-    if (directededge->use() == Use::kBikeShareConnection) {
-      std::cout << " Use::kBikeShareConnection " << std::endl;
-    }
-    auto ll = tile->get_node_ll(startnode);
-    std::cout << ll.second << " " << ll.first  << std::endl;
 
     destinations_[edge.graph_id()] = pedestrian_costing_->EdgeCost(directededge, tile->GetSpeed(directededge)) *
                                      (1.0f - edge.percent_along());
@@ -593,18 +571,7 @@ std::vector<PathInfo> AStarBSSAlgorithm::FormPath(baldr::GraphReader& graphreade
     if (edgelabel.use() == Use::kFerry) {
       has_ferry_ = true;
     }
-    if (edgelabel.mode() == TravelMode::kPedestrian) {
-      std::cout << "use pedestrian" << std::endl;
-    }
-    if (edgelabel.mode() == TravelMode::kBicycle) {
-      std::cout << "use Bicycle" << std::endl;
-    }
-    if (directededge->use() == Use::kBikeShareConnection) {
-          std::cout << "use BikeShareConnection" << std::endl;
-        }
-
-    std::cout << ll.second << " " << ll.first << '\n';
-  }
+}
 
   // Reverse the list and return
   std::reverse(path.begin(), path.end());
