@@ -626,7 +626,6 @@ protected:
       c += ferry_transition_cost_;
     }
 
-
     // Additional penalties without any time cost
     if (edge->destonly() && !pred.destonly()) {
       c.cost += destination_only_penalty_;

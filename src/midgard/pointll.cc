@@ -334,8 +334,7 @@ PointLL PointLL::Project(const PointLL& u, const PointLL& v, float lon_scale) co
   return {u.first + bx * scale, u.second + by * scale};
 }
 
-std::tuple<PointLL, float, int>
-PointLL::Project(const std::vector<PointLL>& pts) const {
+std::tuple<PointLL, float, int> PointLL::Project(const std::vector<PointLL>& pts) const {
 
   auto u = pts.begin();
   auto v = pts.begin();
@@ -344,7 +343,7 @@ PointLL::Project(const std::vector<PointLL>& pts) const {
   auto min_distance = std::numeric_limits<float>::max();
   auto best = PointLL{};
   int best_index;
-  while(v != pts.end()) {
+  while (v != pts.end()) {
     auto candidate = Project(*u, *v);
     auto distance = Distance(candidate);
     if (distance < min_distance) {

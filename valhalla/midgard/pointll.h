@@ -235,8 +235,7 @@ public:
    */
   PointLL Project(const PointLL& u, const PointLL& v, float lon_scale) const;
 
-  std::tuple<PointLL, float, int>
-  Project(const std::vector<PointLL>& pts) const;
+  std::tuple<PointLL, float, int> Project(const std::vector<PointLL>& pts) const;
 
 private:
   static constexpr float INVALID = 0xBADBADBAD;

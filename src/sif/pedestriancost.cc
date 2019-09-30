@@ -583,7 +583,8 @@ bool PedestrianCost::Allowed(const baldr::DirectedEdge* edge,
                              const uint32_t tz_index) const {
   if (!(edge->forwardaccess() & access_mask_) || (edge->surface() > minimal_allowed_surface_) ||
       edge->is_shortcut() || IsUserAvoidEdge(edgeid) || edge->sac_scale() > max_hiking_difficulty_ ||
-      (!pred.deadend() && pred.opp_local_idx() == edge->localedgeidx() && pred.mode() == TravelMode::kPedestrian) ||
+      (!pred.deadend() && pred.opp_local_idx() == edge->localedgeidx() &&
+       pred.mode() == TravelMode::kPedestrian) ||
       //      (edge->max_up_slope() > max_grade_ || edge->max_down_slope() > max_grade_) ||
       ((pred.path_distance() + edge->length()) > max_distance_)) {
     return false;
@@ -633,7 +634,8 @@ bool PedestrianCost::AllowedReverse(const baldr::DirectedEdge* edge,
   if (!(opp_edge->forwardaccess() & access_mask_) ||
       (opp_edge->surface() > minimal_allowed_surface_) || opp_edge->is_shortcut() ||
       IsUserAvoidEdge(opp_edgeid) || edge->sac_scale() > max_hiking_difficulty_ ||
-      (!pred.deadend() && pred.opp_local_idx() == edge->localedgeidx() && pred.mode() == TravelMode::kPedestrian) ||
+      (!pred.deadend() && pred.opp_local_idx() == edge->localedgeidx() &&
+       pred.mode() == TravelMode::kPedestrian) ||
       //      (opp_edge->max_up_slope() > max_grade_ || opp_edge->max_down_slope() > max_grade_) ||
       opp_edge->use() == Use::kTransitConnection || opp_edge->use() == Use::kEgressConnection ||
       opp_edge->use() == Use::kPlatformConnection) {

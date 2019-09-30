@@ -33,7 +33,7 @@ constexpr float kDefaultFerryCost = 300.0f;              // Seconds
 constexpr float kDefaultCountryCrossingCost = 600.0f;    // Seconds
 constexpr float kDefaultCountryCrossingPenalty = 0.0f;   // Seconds
 constexpr float kDefaultBssCost = 120.0f;                // Seconds
-constexpr float kDefaultBssPenalty = 0.0f;              // Seconds
+constexpr float kDefaultBssPenalty = 0.0f;               // Seconds
 
 // Other options
 constexpr float kDefaultDrivewayPenalty = 300.0f; // Seconds
@@ -510,7 +510,8 @@ bool BicycleCost::Allowed(const baldr::DirectedEdge* edge,
   // vehicular turn restrictions. Allow Uturns at dead ends only.
   // Skip impassable edges and shortcut edges.
   if (!(edge->forwardaccess() & kBicycleAccess) || edge->is_shortcut() ||
-      (!pred.deadend() && pred.opp_local_idx() == edge->localedgeidx() && pred.mode() == TravelMode::kBicycle) ||
+      (!pred.deadend() && pred.opp_local_idx() == edge->localedgeidx() &&
+       pred.mode() == TravelMode::kBicycle) ||
       (pred.restrictions() & (1 << edge->localedgeidx())) || IsUserAvoidEdge(edgeid)) {
     return false;
   }
@@ -559,7 +560,8 @@ bool BicycleCost::AllowedReverse(const baldr::DirectedEdge* edge,
   if (!(opp_edge->forwardaccess() & kBicycleAccess) || opp_edge->is_shortcut() ||
       opp_edge->use() == Use::kTransitConnection || opp_edge->use() == Use::kEgressConnection ||
       opp_edge->use() == Use::kPlatformConnection ||
-      (!pred.deadend() && pred.opp_local_idx() == edge->localedgeidx() && pred.mode() == TravelMode::kBicycle) ||
+      (!pred.deadend() && pred.opp_local_idx() == edge->localedgeidx() &&
+       pred.mode() == TravelMode::kBicycle) ||
       (opp_edge->restrictions() & (1 << pred.opp_local_idx())) || IsUserAvoidEdge(opp_edgeid)) {
     return false;
   }
@@ -695,7 +697,7 @@ Cost BicycleCost::EdgeCost(const baldr::DirectedEdge* edge, const uint32_t speed
 
   // Compute elapsed time based on speed. Modulate cost with weighting factors.
   float sec = (edge->length() * speedfactor_[bike_speed]);
-  return {sec * factor, sec};
+  return {sec * factor * 0.4, sec};
 }
 
 // Returns the time (in seconds) to make the transition from the predecessor
