@@ -176,5 +176,9 @@ void DynamicCost::AddUserAvoidEdges(const std::vector<AvoidEdge>& avoid_edges) {
   }
 }
 
+Cost DynamicCost::BSSCost() const {
+  return kNoCost;
+};
+
 } // namespace sif
 } // namespace valhalla

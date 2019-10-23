@@ -127,6 +127,9 @@ constexpr ranged_default_t<uint32_t> kTransitTransferMaxDistanceRange{0, kTransi
                                                                       50000}; // Max 50k
 constexpr ranged_default_t<float> kUseFerryRange{0, kDefaultUseFerry, 1.0f};
 
+constexpr ranged_default_t<float> kBSSCostRange{0, kDefaultBssCost, kMaxPenalty};
+constexpr ranged_default_t<float> kBSSPenaltyRange{0, kDefaultBssPenalty, kMaxPenalty};
+
 constexpr float kSacScaleSpeedFactor[] = {
     1.0f,  // kNone
     1.11f, // kHiking (~90% speed)
@@ -379,6 +382,10 @@ public:
     auto access_mask = access_mask_;
     return [access_mask](const baldr::NodeInfo* node) { return !(node->access() & access_mask); };
   }
+
+  virtual Cost BSSCost() const override {
+    return {kDefaultBssCost, kDefaultBssPenalty};
+  };
 
 public:
   // Type: foot (default), wheelchair, etc.
@@ -881,6 +888,13 @@ void ParsePedestrianCostOptions(const rapidjson::Document& doc,
         rapidjson::get_optional<uint32_t>(*json_costing_options, "/transit_transfer_max_distance")
             .get_value_or(kTransitTransferMaxDistance)));
 
+    // bss rent cost
+    pbf_costing_options->set_bike_share_cost(
+        kBSSCostRange(rapidjson::get_optional<uint32_t>(*json_costing_options, "/bss_rent_cost")
+                          .get_value_or(kDefaultBssCost)));
+    pbf_costing_options->set_bike_share_penalty(
+        kBSSPenaltyRange(rapidjson::get_optional<uint32_t>(*json_costing_options, "/bss_rent_cost")
+                             .get_value_or(kDefaultBssPenalty)));
   } else {
     // Set pbf values to defaults
     pbf_costing_options->set_maneuver_penalty(kDefaultManeuverPenalty);

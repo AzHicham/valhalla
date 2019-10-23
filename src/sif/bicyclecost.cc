@@ -206,6 +206,9 @@ constexpr ranged_default_t<float> kUseRoadRange{0.0f, kDefaultUseRoad, 1.0f};
 constexpr ranged_default_t<float> kUseFerryRange{0.0f, kDefaultUseFerry, 1.0f};
 constexpr ranged_default_t<float> kUseHillsRange{0.0f, kDefaultUseHills, 1.0f};
 constexpr ranged_default_t<float> kAvoidBadSurfacesRange{0.0f, kDefaultAvoidBadSurfaces, 1.0f};
+
+constexpr ranged_default_t<float> kBSSCostRange{0, kDefaultBssCost, kMaxPenalty};
+constexpr ranged_default_t<float> kBSSPenaltyRange{0, kDefaultBssPenalty, kMaxPenalty};
 } // namespace
 
 /**
@@ -350,6 +353,10 @@ public:
   virtual uint8_t travel_type() const {
     return static_cast<uint8_t>(type_);
   }
+
+  virtual Cost BSSCost() const override {
+    return {kDefaultBssCost, kDefaultBssPenalty};
+  };
 
   // Hidden in source file so we don't need it to be protected
   // We expose it within the source file for testing purposes
@@ -697,7 +704,7 @@ Cost BicycleCost::EdgeCost(const baldr::DirectedEdge* edge, const uint32_t speed
 
   // Compute elapsed time based on speed. Modulate cost with weighting factors.
   float sec = (edge->length() * speedfactor_[bike_speed]);
-  return {sec * factor * 0.4, sec};
+  return {sec * factor, sec};
 }
 
 // Returns the time (in seconds) to make the transition from the predecessor
@@ -957,6 +964,13 @@ void ParseBicycleCostOptions(const rapidjson::Document& doc,
         kCycleSpeedRange(rapidjson::get_optional<float>(*json_costing_options, "/cycling_speed")
                              .get_value_or(kDefaultCyclingSpeed[t])));
 
+    // bss return cost
+    pbf_costing_options->set_bike_share_cost(
+        kBSSCostRange(rapidjson::get_optional<uint32_t>(*json_costing_options, "/bss_rent_cost")
+                          .get_value_or(kDefaultBssCost)));
+    pbf_costing_options->set_bike_share_penalty(
+        kBSSPenaltyRange(rapidjson::get_optional<uint32_t>(*json_costing_options, "/bss_rent_cost")
+                             .get_value_or(kDefaultBssPenalty)));
   } else {
     // Set pbf values to defaults
     pbf_costing_options->set_maneuver_penalty(kDefaultManeuverPenalty);

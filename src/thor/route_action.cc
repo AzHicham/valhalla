@@ -350,9 +350,6 @@ void thor_worker_t::path_arrive_by(Api& api, const std::string& costing) {
     thor::PathAlgorithm* path_algorithm = get_path_algorithm(costing, *origin, *destination);
     path_algorithm->Clear();
 
-    if (path_algorithm->has_bss()) {
-      std::cout << "Yessssssssss" << std::endl;
-    }
     // TODO: delete this and send all cases to the function above
     // If we are continuing through a location we need to make sure we
     // only allow the edge that was used previously (avoid u-turns)

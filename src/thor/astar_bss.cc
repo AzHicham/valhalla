@@ -28,6 +28,8 @@ constexpr uint64_t kInitialEdgeLabelCount = 500000;
 // Number of iterations to allow with no convergence to the destination
 constexpr uint32_t kMaxIterationsWithoutConvergence = 200000;
 
+constexpr float kNormalizingFactor = 0.6;
+
 // Default constructor
 AStarBSSAlgorithm::AStarBSSAlgorithm()
     : PathAlgorithm(), mode_(TravelMode::kDrive), travel_type_(0), adjacencylist_(nullptr),
@@ -91,7 +93,8 @@ void AStarBSSAlgorithm::Init(const midgard::PointLL& origll, const midgard::Poin
 
   // Get hierarchy limits from the costing. Get a copy since we increment
   // transition counts (i.e., this is not a const reference).
-  hierarchy_limits_ = pedestrian_costing_->GetHierarchyLimits();
+  pedestrian_hierarchy_limits_ = pedestrian_costing_->GetHierarchyLimits();
+  bicycle_hierarchy_limits_ = bicycle_costing_->GetHierarchyLimits();
 }
 
 // Modulate the hierarchy expansion within distance based on density at
@@ -119,7 +122,8 @@ void AStarBSSAlgorithm::ModifyHierarchyLimits(const float dist, const uint32_t d
     factor *= f;
   }*/
   // TODO - just arterial for now...investigate whether to alter local as well
-  hierarchy_limits_[1].expansion_within_dist *= factor;
+  pedestrian_hierarchy_limits_[1].expansion_within_dist *= factor;
+  bicycle_hierarchy_limits_[1].expansion_within_dist *= factor;
 }
 
 // Expand from the node along the forward search path. Immediately expands
@@ -135,9 +139,12 @@ void AStarBSSAlgorithm::ExpandForward(GraphReader& graphreader,
                                       const sif::TravelMode mode,
                                       const valhalla::Location& destination,
                                       std::pair<int32_t, float>& best_path) {
-  auto current_costing = (mode == TravelMode::kPedestrian ? pedestrian_costing_ : bicycle_costing_);
-  auto current_heuristic =
+  const auto& current_costing =
+      (mode == TravelMode::kPedestrian ? pedestrian_costing_ : bicycle_costing_);
+  const auto& current_heuristic =
       (mode == TravelMode::kPedestrian ? pedestrian_astarheuristic_ : bicycle_astarheuristic_);
+  auto& current_hierarchy_limits =
+      (mode == TravelMode::kPedestrian ? pedestrian_hierarchy_limits_ : bicycle_hierarchy_limits_);
 
   // Get the tile and the node info. Skip if tile is null (can happen
   // with regional data sets) or if no access at the node.
@@ -169,7 +176,7 @@ void AStarBSSAlgorithm::ExpandForward(GraphReader& graphreader,
     // transition down to that level. If using a shortcut, set the shortcuts mask.
     // Skip if this is a regular edge superseded by a shortcut.
     if (directededge->is_shortcut()) {
-      if (!hierarchy_limits_[edgeid.level() + 1].StopExpanding() ||
+      if (!current_hierarchy_limits[edgeid.level() + 1].StopExpanding() ||
           (pred.distance() < 10000.0f || directededge->length() > max_shortcut_length)) {
         continue;
       } else {
@@ -188,9 +195,11 @@ void AStarBSSAlgorithm::ExpandForward(GraphReader& graphreader,
       continue;
     }
 
+    auto edge_cost = current_costing->EdgeCost(directededge, tile->GetSpeed(directededge));
+    float normalize_factor = (mode == TravelMode::kPedestrian ? 1 : kNormalizingFactor);
+    Cost normalized_edge_cost = {edge_cost.cost * normalize_factor, edge_cost.secs};
     // Compute the cost to the end of this edge
-    Cost newcost = pred.cost() +
-                   current_costing->EdgeCost(directededge, tile->GetSpeed(directededge)) +
+    Cost newcost = pred.cost() + normalized_edge_cost +
                    current_costing->TransitionCost(directededge, nodeinfo, pred);
 
     // If this edge is a destination, subtract the partial/remainder cost
@@ -266,10 +275,10 @@ void AStarBSSAlgorithm::ExpandForward(GraphReader& graphreader,
     const NodeTransition* trans = tile->transition(nodeinfo->transition_index());
     for (uint32_t i = 0; i < nodeinfo->transition_count(); ++i, ++trans) {
       if (trans->up()) {
-        hierarchy_limits_[node.level()].up_transition_count++;
+        current_hierarchy_limits[node.level()].up_transition_count++;
         ExpandForward(graphreader, trans->endnode(), pred, pred_idx, true, from_bss, mode,
                       destination, best_path);
-      } else if (!hierarchy_limits_[trans->endnode().level()].StopExpanding(pred.distance())) {
+      } else if (!current_hierarchy_limits[trans->endnode().level()].StopExpanding(pred.distance())) {
         ExpandForward(graphreader, trans->endnode(), pred, pred_idx, true, from_bss, mode,
                       destination, best_path);
       }
@@ -339,13 +348,9 @@ AStarBSSAlgorithm::GetBestPath(valhalla::Location& origin,
     // Copy the EdgeLabel for use in costing. Check if this is a destination
     // edge and potentially complete the path.
     EdgeLabel pred = edgelabels_[predindex];
-    std::cout << "-----------------" << std::endl;
-    std::cout << int(pred.mode()) << " " << pred.sortcost() << std::endl;
 
     const GraphTile* tile = graphreader.GetGraphTile(pred.endnode());
     auto ll = tile->get_node_ll(pred.endnode());
-    std::cout << ll.second << "  " << ll.first << std::endl;
-    std::cout << "-----------------" << std::endl;
 
     if (destinations_.find(pred.edgeid()) != destinations_.end() &&
         pred.mode() == TravelMode::kPedestrian) {
@@ -385,9 +390,13 @@ AStarBSSAlgorithm::GetBestPath(valhalla::Location& origin,
       }
     }
 
+    const auto& hierarchy_limits =
+        (pred.mode() == TravelMode::kPedestrian ? pedestrian_hierarchy_limits_
+                                                : bicycle_hierarchy_limits_);
+
     // Do not expand based on hierarchy level based on number of upward
     // transitions and distance to the destination
-    if (hierarchy_limits_[pred.endnode().level()].StopExpanding(dist2dest)) {
+    if (hierarchy_limits[pred.endnode().level()].StopExpanding(dist2dest)) {
       continue;
     }
 
@@ -577,6 +586,9 @@ std::vector<PathInfo> AStarBSSAlgorithm::FormPath(baldr::GraphReader& graphreade
 
   // Work backwards from the destination
   std::vector<PathInfo> path;
+  TravelMode old = TravelMode::kPedestrian;
+  int mode_change_count = 0;
+
   for (auto edgelabel_index = dest; edgelabel_index != kInvalidLabel;
        edgelabel_index = edgelabels_[edgelabel_index].predecessor()) {
     const EdgeLabel& edgelabel = edgelabels_[edgelabel_index];
@@ -591,7 +603,13 @@ std::vector<PathInfo> AStarBSSAlgorithm::FormPath(baldr::GraphReader& graphreade
     if (edgelabel.use() == Use::kFerry) {
       has_ferry_ = true;
     }
+
+    if (edgelabel.mode() != old) {
+      old = edgelabel.mode();
+      mode_change_count++;
+    }
   }
+  assert(mode_change_count == 0 || mode_change_count == 2);
 
   // Reverse the list and return
   std::reverse(path.begin(), path.end());
