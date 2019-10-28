@@ -28,8 +28,6 @@ constexpr uint64_t kInitialEdgeLabelCount = 500000;
 // Number of iterations to allow with no convergence to the destination
 constexpr uint32_t kMaxIterationsWithoutConvergence = 200000;
 
-constexpr float kNormalizingFactor = 0.6;
-
 // Default constructor
 AStarBSSAlgorithm::AStarBSSAlgorithm()
     : PathAlgorithm(), mode_(TravelMode::kDrive), travel_type_(0), adjacencylist_(nullptr),
@@ -196,8 +194,7 @@ void AStarBSSAlgorithm::ExpandForward(GraphReader& graphreader,
     }
 
     auto edge_cost = current_costing->EdgeCost(directededge, tile->GetSpeed(directededge));
-    float normalize_factor = (mode == TravelMode::kPedestrian ? 1 : kNormalizingFactor);
-    Cost normalized_edge_cost = {edge_cost.cost * normalize_factor, edge_cost.secs};
+    Cost normalized_edge_cost = {edge_cost.cost * current_costing->GetModeFactor(), edge_cost.secs};
     // Compute the cost to the end of this edge
     Cost newcost = pred.cost() + normalized_edge_cost +
                    current_costing->TransitionCost(directededge, nodeinfo, pred);

@@ -234,7 +234,11 @@ thor::PathAlgorithm* thor_worker_t::get_path_algorithm(const std::string& routet
                                                        const valhalla::Location& destination) {
   // Have to use multimodal for transit based routing
   if (routetype == "multimodal" || routetype == "transit") {
-    std::cout << "use bss astar" << std::endl;
+    multi_modal_astar.set_interrupt(interrupt);
+    return &multi_modal_astar;
+  }
+
+  if (routetype == "bikeshare") {
     bss_astar.set_interrupt(interrupt);
     return &bss_astar;
   }

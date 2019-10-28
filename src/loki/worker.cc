@@ -75,7 +75,7 @@ void loki_worker_t::parse_costing(Api& api) {
   }
 
   // TODO - have a way of specifying mode at the location
-  if (costing == Costing::multimodal) {
+  if (costing == Costing::multimodal || costing == Costing::bikeshare) {
     costing = Costing::pedestrian;
   }
 
