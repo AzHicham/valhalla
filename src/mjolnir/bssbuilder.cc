@@ -183,10 +183,11 @@ std::vector<BSSConnectionEdge> project(const GraphTile& local_tile,
           continue;
         }
 
-        std::vector<PointLL> this_shape = edgeinfo.shape();
         if (!directededge->forward()) {
-          std::reverse(this_shape.begin(), this_shape.end());
+          continue;
         }
+        std::vector<PointLL> this_shape = edgeinfo.shape();
+
 
         // use optional to compute the projection only once when the edge is accessible to both modes
         boost::optional<std::tuple<PointLL, float, int>> closest;
