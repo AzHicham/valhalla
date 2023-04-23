@@ -38,7 +38,7 @@
   },
   "devDependencies": {
     "node-cmake": "^2.5.1",
-    "aws-sdk": "^2.257.1",
+    "aws-sdk": "^2.1363.0",
     "tape": "^4.9.0"
   }
 }
